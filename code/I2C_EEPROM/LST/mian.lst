@@ -1,0 +1,1649 @@
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE MIAN
+OBJECT MODULE PLACED IN .\Output\mian.obj
+COMPILER INVOKED BY: D:\keil\C51\BIN\C51.EXE Code\mian.c ROM(COMPACT) OPTIMIZE(8,SPEED) BROWSE INCDIR(..\Include) DEFINE
+                    -(FOSC_160000) DEBUG OBJECTEXTEND PRINT(.\LST\mian.lst) OBJECT(.\Output\mian.obj)
+
+line level    source
+
+   1          
+   2          #include "N76E003.h"
+   3          #include "SFR_Macro.h"
+   4          #include "Function_define.h"
+   5          #include "Common.h"
+   6          #include "Delay.h"
+   7          
+   8          void setTenLedLevel(void);
+   9          
+  10          #define RF_MODE         0
+  11          #define CK_MODE         1
+  12          
+  13          #define BUZZER_MODE     0
+  14          #define MOTOR_MODE      1
+  15          
+  16          #define ON                      1
+  17          #define OFF                     0
+  18          
+  19          /*      LED IO define   */
+  20          #define RF_SET_LED              P00_PushPull_Mode;P00 = 1;
+  21          #define RF_CLR_LED              P00_PushPull_Mode;P00 = 0;
+  22          
+  23          #define CK_SET_LED              P01_PushPull_Mode;P01 = 1;
+  24          #define CK_CLR_LED              P01_PushPull_Mode;P01 = 0;
+  25          
+  26          /*      KEY     IO      define  */
+  27          #define MODE_SWITCH_KEY_INIT    P06_Quasi_Mode;P06 = 1;
+  28          #define GET_MODE_SWITCH_KEY             P06
+  29          
+  30          #define SIX_LED_KEY_INIT                P05_Quasi_Mode;P05 = 1;
+  31          
+  32          
+  33          #define KEY_LONG_PRESS                  400             
+  34          
+  35          
+  36          #define MOTOR_SET_RUN   P10_PushPull_Mode;P10 = 0;
+  37          #define MOTOR_CLR_RUN   P10_PushPull_Mode;P10 = 1;
+  38          
+  39          #define BUZZER_SET_RUN  P12_PushPull_Mode;P12 = 1;
+  40          #define BUZZER_CLR_RUN  P12_PushPull_Mode;P12 = 0;
+  41          
+  42          #define CK_INPUT_INIT   P30_Input_Mode;
+  43          #define GET_CK                  P30
+  44          
+  45          #define RF_ADC_INPUT_INIT       Enable_ADC_AIN2;
+  46          
+  47          
+  48          /*      bits define             */
+  49          bit is_5ms_Flag;
+  50          bit RF_CK_MODE;
+  51          bit RF_CK_ISLONGPRESS;
+  52          bit MOTOR_BUZZER_MODE;
+  53          bit SIX_LED_ON_OFF;
+  54          bit SIX_LED_ISLONGPRESS;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 2   
+
+  55          bit isSIX_LED_ENTER_FLASH_MODE;
+  56          bit Buzzer_Motor_isRun;
+  57          /*              system          */
+  58          unsigned int systime_cnt;
+  59          /*              key                     */
+  60          unsigned int RF_CK_KEY_debounce;
+  61          unsigned char SIX_LED_KEY_debounce;
+  62          
+  63          /*              six led pwm level               */
+  64          unsigned char   SIX_LED_Freq;
+  65          unsigned char   SIX_LED_display_time;
+  66          unsigned char   SIX_LED_Cycle;
+  67          unsigned char   SIX_LED_KEY_LONG_PRESS_CNT;
+  68          
+  69          unsigned char RF_CK_LED_Level;
+  70          unsigned char RF_CK_LED_display_step;
+  71          
+  72          unsigned char RF_CK_RUN_CNT;
+  73          unsigned char RF_Level;
+  74          
+  75          unsigned char RF_Level_add_cnt;
+  76          unsigned char RF_Level_del_cnt;
+  77          /*                      Timer 5ms                       */
+  78          /*********************************************************************************************************
+             -***
+  79          *    TIMER 0 interrupt subroutine
+  80          **********************************************************************************************************
+             -**/
+  81          #define TH0_INIT        (65536-6667)/256 //5.0ms@XTAL=12MHz, Period = (10.85/2) ms@XTAL=22.1184MHz
+  82          #define TL0_INIT        (65536-6667)%256
+  83          #define TH1_INIT        (65536-267)/256 //2.5ms@XTAL=12MHz, Period = (5.425/2) ms@XTAL=22.1184MHz
+  84          #define TL1_INIT        (65536-267)%256
+  85          
+  86          void Timer0_ISR (void) interrupt 1          //interrupt address is 0x000B
+  87          {
+  88   1          TH0 = TH0_INIT;
+  89   1          TL0 = TL0_INIT;
+  90   1              is_5ms_Flag = 1;
+  91   1              systime_cnt++;
+  92   1      }
+  93          
+  94          void Timer0_Init(void)
+  95          {
+  96   1              TIMER0_MODE1_ENABLE;                        //Timer 0  mode configuration
+  97   1          
+  98   1              clr_T0M;
+  99   1          
+ 100   1              TH0 = TH0_INIT;
+ 101   1              TL0 = TL0_INIT;
+ 102   1          
+ 103   1              set_ET0;                                    //enable Timer0 interrupt
+ 104   1              set_EA;                                     //enable interrupts
+ 105   1              
+ 106   1              set_TR0;                                    //Timer0 run
+ 107   1      }
+ 108          
+ 109          void Timer1_ISR (void) interrupt 3
+ 110          {
+ 111   1              TH1 = TH1_INIT;
+ 112   1          TL1 = TL1_INIT;
+ 113   1              setTenLedLevel();
+ 114   1      }
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 3   
+
+ 115          
+ 116          void Timer1_Init(void)
+ 117          {
+ 118   1              //for 1ms interrupt
+ 119   1              TIMER1_MODE1_ENABLE;                        //Timer 0  mode configuration
+ 120   1          
+ 121   1              clr_T1M;
+ 122   1          
+ 123   1              TH1 = TH1_INIT;
+ 124   1              TL1 = TL1_INIT;
+ 125   1          
+ 126   1              set_ET1;                                    //enable Timer0 interrupt
+ 127   1              set_EA;                                     //enable interrupts
+ 128   1              
+ 129   1              set_TR1;                                    //Timer0 run        
+ 130   1      }
+ 131          
+ 132          /*              battery power           */
+ 133          float  Bandgap_Voltage,VDD_Voltage;                     //please always use "double" mode for this
+ 134          int ADCsumH=0, ADCsumL=0;
+ 135          
+ 136          void get_battery_power(void)
+ 137          {
+ 138   1                      float bgvalue;
+ 139   1                      unsigned int i;
+ 140   1              
+ 141   1                      UINT8 BandgapHigh,BandgapLow,BandgapMark;
+ 142   1                      float Bandgap_Value,Bandgap_Voltage_Temp;
+ 143   1              
+ 144   1                      set_IAPEN;
+ 145   1                      IAPCN = READ_UID;
+ 146   1                      IAPAL = 0x0d;
+ 147   1                      IAPAH = 0x00;
+ 148   1                      set_IAPGO;
+ 149   1                      BandgapLow = IAPFD;
+ 150   1                      BandgapMark = BandgapLow&0xF0;
+ 151   1                              
+ 152   1                      if (BandgapMark==0x80)
+ 153   1                      {
+ 154   2                                      BandgapLow = BandgapLow&0x0F;
+ 155   2                                      IAPAL = 0x0C;
+ 156   2                                      IAPAH = 0x00;
+ 157   2                                      set_IAPGO;
+ 158   2                                      BandgapHigh = IAPFD;
+ 159   2                                      Bandgap_Value = (BandgapHigh<<4)+BandgapLow;
+ 160   2                                      Bandgap_Voltage_Temp = Bandgap_Value*3/4;
+ 161   2                                      Bandgap_Voltage = Bandgap_Voltage_Temp - 33;                    //the actually banggap voltage value is similar this va
+             -lue.
+ 162   2                      }
+ 163   1                      if (BandgapMark==0x00)
+ 164   1                      {
+ 165   2                                      BandgapLow = BandgapLow&0x0F;
+ 166   2                                      IAPAL = 0x0C;
+ 167   2                                      IAPAH = 0x00;
+ 168   2                                      set_IAPGO;
+ 169   2                                      BandgapHigh = IAPFD;
+ 170   2                                      Bandgap_Value = (BandgapHigh<<4)+BandgapLow;
+ 171   2                                      Bandgap_Voltage= Bandgap_Value*3/4;
+ 172   2                      }
+ 173   1                      if (BandgapMark==0x90)
+ 174   1                      {
+ 175   2                                      IAPAL = 0x0E;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 4   
+
+ 176   2                                      IAPAH = 0x00;
+ 177   2                                      set_IAPGO;
+ 178   2                                      BandgapHigh = IAPFD;
+ 179   2                                      IAPAL = 0x0F;
+ 180   2                                      IAPAH = 0x00;
+ 181   2                                      set_IAPGO;
+ 182   2                                      BandgapLow = IAPFD;
+ 183   2                                      BandgapLow = BandgapLow&0x0F;
+ 184   2                                      Bandgap_Value = (BandgapHigh<<4)+BandgapLow;
+ 185   2                                      Bandgap_Voltage= Bandgap_Value*3/4;
+ 186   2                      }
+ 187   1                      clr_IAPEN;
+ 188   1                      Enable_ADC_BandGap;
+ 189   1                      ADCsumH = 0;
+ 190   1                      ADCsumL = 0;
+ 191   1                      CKDIV = 0x02;                                                                                                                   // IMPORTANT!! Modify system clock to 4MHz ,then add the ADC sampling clock 
+             -base to add the sampling timing.
+ 192   1                      for(i=0;i<5;i++)                                                                                                        // All following ADC detect timing is 200uS run under 4MHz.
+ 193   1                      {
+ 194   2                              clr_ADCF;
+ 195   2                              set_ADCS;
+ 196   2                              while(ADCF == 0);
+ 197   2                              if (i >= 2)
+ 198   2                              {
+ 199   3                                      ADCsumH += ADCRH;
+ 200   3                                      ADCsumL += ADCRL;
+ 201   3                              }
+ 202   2                      }               
+ 203   1                      CKDIV = 0x00;                                                                                                                   // After ADC sampling, modify system clock back to 16MHz to run next code.
+ 204   1                              
+ 205   1                      ADCsumH = ADCsumH/3;
+ 206   1                      ADCsumL = ADCsumL/3;
+ 207   1                      bgvalue = (ADCsumH<<4) + ADCsumL;
+ 208   1                      VDD_Voltage = (0x1000/bgvalue)*Bandgap_Voltage;
+ 209   1      }
+ 210          
+ 211          
+ 212          /*                              KEY                             */
+ 213          unsigned char get_RF_CK_Key(void)
+ 214          {
+ 215   1              unsigned char keystatus;
+ 216   1              keystatus = 0;
+ 217   1              if (P06 == 0)
+ 218   1              {
+ 219   2                      RF_CK_KEY_debounce++;
+ 220   2                      if (RF_CK_KEY_debounce > KEY_LONG_PRESS)
+ 221   2                      {
+ 222   3                              RF_CK_KEY_debounce = KEY_LONG_PRESS;
+ 223   3                              if (RF_CK_ISLONGPRESS == 0)
+ 224   3                              {
+ 225   4                                      RF_CK_ISLONGPRESS = 1;
+ 226   4                                      keystatus = 0x02;
+ 227   4                              }
+ 228   3                      }
+ 229   2              }
+ 230   1              else
+ 231   1              {
+ 232   2                      if (RF_CK_ISLONGPRESS == 0)
+ 233   2                      {
+ 234   3                              if (RF_CK_KEY_debounce > 20)
+ 235   3                              {
+ 236   4                                      keystatus = 1;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 5   
+
+ 237   4                              }
+ 238   3                      }
+ 239   2                      RF_CK_KEY_debounce = 0;
+ 240   2                      RF_CK_ISLONGPRESS = 0;
+ 241   2              }
+ 242   1              return keystatus;
+ 243   1      }
+ 244          
+ 245          
+ 246          unsigned char get_SIX_LED_Key(void)
+ 247          {
+ 248   1              unsigned char keystatus;
+ 249   1              keystatus = 0;
+ 250   1              if (P05 == 0)
+ 251   1              {
+ 252   2                      SIX_LED_KEY_debounce++;
+ 253   2                      if (SIX_LED_KEY_debounce > SIX_LED_KEY_LONG_PRESS_CNT)
+ 254   2                      {
+ 255   3                              SIX_LED_KEY_debounce = 0;
+ 256   3                              SIX_LED_ISLONGPRESS = 1;
+ 257   3                              keystatus = 0x02;
+ 258   3                      }
+ 259   2              }
+ 260   1              else
+ 261   1              {
+ 262   2                      if (SIX_LED_ISLONGPRESS == 0)
+ 263   2                      {
+ 264   3                              if (SIX_LED_KEY_debounce > 20)
+ 265   3                                      keystatus = 1;
+ 266   3                      }
+ 267   2                      else if (SIX_LED_ISLONGPRESS)
+ 268   2                      {
+ 269   3                              keystatus = 4;
+ 270   3                      }
+ 271   2                      SIX_LED_ISLONGPRESS = 0;
+ 272   2                      SIX_LED_KEY_debounce = 0;
+ 273   2              }
+ 274   1              return keystatus;
+ 275   1      }
+ 276          
+ 277          /*                              SIX LED                 */
+ 278          void PWM_ISR (void) interrupt 13
+ 279          {
+ 280   1          clr_PWMF;               // clear PWM interrupt flag
+ 281   1      }
+ 282          
+ 283          void setSixLedFreq(unsigned char freq,unsigned char duty)
+ 284          {
+ 285   1              unsigned int freqtemp;
+ 286   1              if (duty == 0)
+ 287   1              {
+ 288   2                      //turn off six led
+ 289   2                      //disable pwm P1.1
+ 290   2                      PWM1_P11_OUTPUT_DISABLE;
+ 291   2                      clr_PWMRUN;
+ 292   2                      P11_PushPull_Mode;
+ 293   2                      P11 = 0;
+ 294   2              }
+ 295   1              else if (duty == 100)
+ 296   1              {
+ 297   2                      //turn on six led
+ 298   2                      //disable pwm P1.1
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 6   
+
+ 299   2                      PWM1_P11_OUTPUT_DISABLE;
+ 300   2                      clr_PWMRUN;
+ 301   2                      P11_PushPull_Mode;
+ 302   2                      P11 = 1;
+ 303   2              }
+ 304   1              else if (duty == 50)
+ 305   1              {
+ 306   2                      if (freq > 10)
+ 307   2                              freq = 10;
+ 308   2                      if (freq & 0x01)
+ 309   2                      {
+ 310   3                              freq -= 1;
+ 311   3                      }
+ 312   2                      /*      set freqs       */
+ 313   2                      if (freq == 10)         //10HZ
+ 314   2                      {
+ 315   3                              freqtemp = 0x3080;
+ 316   3                      }
+ 317   2                      else if (freq == 8)     //7HZ
+ 318   2                      {
+ 319   3                              freqtemp = 0x45C0;
+ 320   3                      }
+ 321   2                      else if (freq == 6)     //5HZ
+ 322   2                      {
+ 323   3                              freqtemp = 0x6180;
+ 324   3                      }
+ 325   2                      else if (freq == 4)     //3HZ
+ 326   2                      {
+ 327   3                              freqtemp = 0xA200;
+ 328   3                      }
+ 329   2                      else if (freq == 2)     //2HZ
+ 330   2                      {
+ 331   3                              freqtemp = 0xF400;
+ 332   3                      }
+ 333   2                      else
+ 334   2                              return;
+ 335   2                      //turn on with pwm
+ 336   2                      //enbale pwm P1.1
+ 337   2                      PWM1_P11_OUTPUT_ENABLE;
+ 338   2      
+ 339   2      //              PWM_IMDEPENDENT_MODE;
+ 340   2                      
+ 341   2      //              PWM_INT_PWM2;
+ 342   2      //              PWM_FALLING_INT;
+ 343   2                      
+ 344   2                      PWM_CLOCK_FSYS;
+ 345   2                      PWM_CLOCK_DIV_128;
+ 346   2                      PWMPH = freqtemp>>8;
+ 347   2                      PWMPL = freqtemp&0xFF;
+ 348   2                      set_SFRPAGE;
+ 349   2                      freqtemp = freqtemp>>1;
+ 350   2                      freqtemp = freqtemp + 1;
+ 351   2                      PWM1H = freqtemp>>8;
+ 352   2                      PWM1L = freqtemp&0xFF;
+ 353   2                      clr_SFRPAGE;
+ 354   2                      //-------- PWM start run--------------
+ 355   2                      set_LOAD;
+ 356   2                      set_PWMRUN;                     
+ 357   2              }
+ 358   1      }
+ 359          
+ 360          
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 7   
+
+ 361          /*                              TEN     LED                     */
+ 362          
+ 363          void RF_CK_LED_LEVEL1(unsigned char step)
+ 364          {
+ 365   1                      #if 1   // 1
+ 366   1                      P17_Quasi_Mode;
+ 367   1                      P15_Quasi_Mode;
+ 368   1                      P14_Quasi_Mode;
+ 369   1                      P13_Quasi_Mode;
+ 370   1                      if (step == 4)
+ 371   1                      {
+ 372   2                              P17_Input_Mode;
+ 373   2                              P17 = 1;
+ 374   2                              P15_Input_Mode;
+ 375   2                              P15 = 1;
+ 376   2                              P14_Input_Mode;
+ 377   2                              P14 = 1;
+ 378   2                              P13_Input_Mode;
+ 379   2                              P13 = 1;
+ 380   2                      }
+ 381   1                      else if (step == 1)
+ 382   1                      {
+ 383   2                              P17_PushPull_Mode;
+ 384   2                              P17 = 1;
+ 385   2                              P15_PushPull_Mode;
+ 386   2                              P15 = 1;
+ 387   2                              P14_Input_Mode;
+ 388   2                              P14 = 1;
+ 389   2                              P13_Input_Mode;
+ 390   2                              P13 = 1;
+ 391   2                      }
+ 392   1                      else if (step == 2)
+ 393   1                      {
+ 394   2                              P17_Input_Mode;
+ 395   2                              P17 = 1;
+ 396   2                              P15_PushPull_Mode;
+ 397   2                              P15 = 1;
+ 398   2                              P14_Input_Mode;
+ 399   2                              P14 = 1;
+ 400   2                              P13_Input_Mode;
+ 401   2                              P13 = 1;
+ 402   2                      }
+ 403   1                      else if (step == 3)
+ 404   1                      {
+ 405   2                              P17 = 0;
+ 406   2                              P15_PushPull_Mode;
+ 407   2                              P15 = 1;
+ 408   2                              P14_Input_Mode;
+ 409   2                              P14 = 1;
+ 410   2                              P13_Input_Mode;
+ 411   2                              P13 = 1; 
+ 412   2                      }
+ 413   1                      
+ 414   1                      #endif
+ 415   1      }
+ 416          void RF_CK_LED_LEVEL2(unsigned char step)
+ 417          {
+ 418   1                      #if 1   // 2
+ 419   1                              
+ 420   1                              P17_Quasi_Mode;
+ 421   1                              P15_Quasi_Mode;
+ 422   1                              P14_Quasi_Mode;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 8   
+
+ 423   1                              P13_Quasi_Mode;
+ 424   1                      if (step == 4)
+ 425   1                      {
+ 426   2                              P17_PushPull_Mode;
+ 427   2                              P17 = 1;
+ 428   2                              P15_PushPull_Mode;
+ 429   2                              P15 = 1;
+ 430   2                              P14_PushPull_Mode;
+ 431   2                              P14 = 1;
+ 432   2                              P13_PushPull_Mode;
+ 433   2                              P13 = 1;
+ 434   2                      }
+ 435   1                      else if (step == 1)
+ 436   1                      {
+ 437   2                              P17_PushPull_Mode;
+ 438   2                              P17 = 1;
+ 439   2                              P15_PushPull_Mode;
+ 440   2                              P15 = 1;
+ 441   2                              P14_Input_Mode;
+ 442   2                              P14 = 1;
+ 443   2                              P13_Input_Mode;
+ 444   2                              P13 = 1;
+ 445   2                      }
+ 446   1                      else if (step == 2)
+ 447   1                      {
+ 448   2                              P17_Input_Mode;
+ 449   2                              P17 = 1;
+ 450   2                              P15_PushPull_Mode;
+ 451   2                              P15 = 1;
+ 452   2                              P14_Input_Mode;
+ 453   2                              P14 = 1;
+ 454   2                              P13_Input_Mode;
+ 455   2                              P13 = 1;
+ 456   2                      }
+ 457   1                      else if (step == 3)
+ 458   1                      {
+ 459   2                              P17 = 0;
+ 460   2                              P15_PushPull_Mode;
+ 461   2                              P15 = 1;
+ 462   2                              P14_PushPull_Mode;
+ 463   2                              P14 = 1;
+ 464   2                              P13_Input_Mode;
+ 465   2                              P13 = 1;
+ 466   2                      }
+ 467   1                      #endif
+ 468   1      }
+ 469          void RF_CK_LED_LEVEL3(unsigned char step)
+ 470          {
+ 471   1                      #if 1   //3
+ 472   1                              
+ 473   1                              P17_Quasi_Mode;
+ 474   1                              P15_Quasi_Mode;
+ 475   1                              P14_Quasi_Mode;
+ 476   1                              P13_Quasi_Mode;
+ 477   1                      if (step == 4)
+ 478   1                      {
+ 479   2                              step = 1;
+ 480   2                              P15_PushPull_Mode;
+ 481   2                              P17 = 0;
+ 482   2                              P15_PushPull_Mode;
+ 483   2                              P15 = 1;
+ 484   2                              P14_PushPull_Mode;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 9   
+
+ 485   2                              P14 = 1;
+ 486   2                              P13_PushPull_Mode;
+ 487   2                              P13 = 1;
+ 488   2                      }
+ 489   1                      else if (step == 1)
+ 490   1                      {
+ 491   2                              step = 2;
+ 492   2                              P17_Input_Mode;
+ 493   2                              P17 = 0;
+ 494   2                              P15_PushPull_Mode;
+ 495   2                              P15 = 1;
+ 496   2                              P14_Input_Mode;
+ 497   2                              P14 = 0;
+ 498   2                              P13_Input_Mode;
+ 499   2                              P13 = 0;
+ 500   2                      }
+ 501   1                      else if (step == 2)
+ 502   1                      {
+ 503   2                              step = 3;
+ 504   2                              P17_Input_Mode;
+ 505   2                              P17 = 0;
+ 506   2                              P15_Input_Mode;
+ 507   2                              P15 = 0;
+ 508   2                              P14_Input_Mode;
+ 509   2                              P14 = 0;
+ 510   2                              P13_Input_Mode;
+ 511   2                              P13 = 0;
+ 512   2                      }
+ 513   1                      else if (step == 3)
+ 514   1                      {
+ 515   2                              step = 0;
+ 516   2                              P17_Input_Mode;
+ 517   2                              P17 = 0;
+ 518   2                              P15_PushPull_Mode;
+ 519   2                              P15 = 0;
+ 520   2                              P14_Input_Mode;
+ 521   2                              P14 = 0;
+ 522   2                              P13_PushPull_Mode;
+ 523   2                              P13 = 0;
+ 524   2                      }
+ 525   1                      #endif
+ 526   1                      
+ 527   1      }
+ 528          void RF_CK_LED_LEVEL4(unsigned char step)
+ 529          {
+ 530   1                      #if 1   //4
+ 531   1                              
+ 532   1                              P17_Quasi_Mode;
+ 533   1                              P15_Quasi_Mode;
+ 534   1                              P14_Quasi_Mode;
+ 535   1                              P13_Quasi_Mode;
+ 536   1                      if (step == 4)
+ 537   1                      {
+ 538   2                              step = 1;
+ 539   2                              P17_PushPull_Mode;
+ 540   2                              P17 = 0;
+ 541   2                              P15_PushPull_Mode;
+ 542   2                              P15 = 1;
+ 543   2                              P14_PushPull_Mode;
+ 544   2                              P14 = 1;
+ 545   2                              P13_PushPull_Mode;
+ 546   2                              P13 = 1;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 10  
+
+ 547   2                      }
+ 548   1                      else if (step == 1)
+ 549   1                      {
+ 550   2                              step = 2;
+ 551   2                              P17_PushPull_Mode;
+ 552   2                              P17 = 1;
+ 553   2                              P15_PushPull_Mode;
+ 554   2                              P15 = 0;
+ 555   2                              P14_Input_Mode;
+ 556   2                              P14 = 0;
+ 557   2                              P13_Input_Mode;
+ 558   2                              P13 = 0;
+ 559   2                      }
+ 560   1                      else if (step == 2)
+ 561   1                      {
+ 562   2                              step = 3;
+ 563   2                              P17_Input_Mode;
+ 564   2                              P17 = 0;
+ 565   2                              P15_Input_Mode;
+ 566   2                              P15 = 0;
+ 567   2                              P14_Input_Mode;
+ 568   2                              P14 = 0;
+ 569   2                              P13_Input_Mode;
+ 570   2                              P13 = 0;
+ 571   2                      }
+ 572   1                      else if (step == 3)
+ 573   1                      {
+ 574   2                              step = 0;
+ 575   2                              P17_Input_Mode;
+ 576   2                              P17 = 0;
+ 577   2                              P15_PushPull_Mode;
+ 578   2                              P15 = 0;
+ 579   2                              P14_Input_Mode;
+ 580   2                              P14 = 0;
+ 581   2                              P13_PushPull_Mode;
+ 582   2                              P13 = 0;
+ 583   2                      }
+ 584   1                      #endif
+ 585   1                      
+ 586   1      }
+ 587          void RF_CK_LED_LEVEL5(unsigned char step)
+ 588          {
+ 589   1                      #if 1   //5
+ 590   1                              
+ 591   1                              P17_Quasi_Mode;
+ 592   1                              P15_Quasi_Mode;
+ 593   1                              P14_Quasi_Mode;
+ 594   1                              P13_Quasi_Mode;
+ 595   1                      if (step == 4)
+ 596   1                      {
+ 597   2                              step = 1;
+ 598   2                              P17_PushPull_Mode;
+ 599   2                              P17 = 0;
+ 600   2                              P15_PushPull_Mode;
+ 601   2                              P15 = 1;
+ 602   2                              P14_PushPull_Mode;
+ 603   2                              P14 = 1;
+ 604   2                              P13_PushPull_Mode;
+ 605   2                              P13 = 1;
+ 606   2                      }
+ 607   1                      else if (step == 1)
+ 608   1                      {
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 11  
+
+ 609   2                              step = 2;
+ 610   2                              P17_PushPull_Mode;
+ 611   2                              P17 = 1;
+ 612   2                              P15_PushPull_Mode;
+ 613   2                              P15 = 0;
+ 614   2                              P14_PushPull_Mode;
+ 615   2                              P14 = 1;
+ 616   2                              P13_Input_Mode;
+ 617   2                              P13 = 0;
+ 618   2                      }
+ 619   1                      else if (step == 2)
+ 620   1                      {
+ 621   2                              step = 3;
+ 622   2                              P17_PushPull_Mode;
+ 623   2                              P17 = 0;
+ 624   2                              P15_PushPull_Mode;
+ 625   2                              P15 = 0;
+ 626   2                              P14_PushPull_Mode;
+ 627   2                              P14 = 0;
+ 628   2                              P13_PushPull_Mode;
+ 629   2                              P13 = 0;
+ 630   2                      }
+ 631   1                      else if (step == 3)
+ 632   1                      {
+ 633   2                              step = 0;
+ 634   2                              P17_PushPull_Mode;
+ 635   2                              P17 = 0;
+ 636   2                              P15_PushPull_Mode;
+ 637   2                              P15 = 0;
+ 638   2                              P14_PushPull_Mode;
+ 639   2                              P14 = 0;
+ 640   2                              P13_PushPull_Mode;
+ 641   2                              P13 = 0;
+ 642   2                      }
+ 643   1                      #endif
+ 644   1      }
+ 645          void RF_CK_LED_LEVEL6(unsigned char step)
+ 646          {
+ 647   1                      #if 1   // 6
+ 648   1                              
+ 649   1                              P17_Quasi_Mode;
+ 650   1                              P15_Quasi_Mode;
+ 651   1                              P14_Quasi_Mode;
+ 652   1                              P13_Quasi_Mode;
+ 653   1                      if (step == 4)
+ 654   1                      {
+ 655   2                              step = 1;
+ 656   2                              P17_PushPull_Mode;
+ 657   2                              P17 = 0;
+ 658   2                              P15_PushPull_Mode;
+ 659   2                              P15 = 1;
+ 660   2                              P14_PushPull_Mode;
+ 661   2                              P14 = 1;
+ 662   2                              P13_PushPull_Mode;
+ 663   2                              P13 = 1;
+ 664   2                      }
+ 665   1                      else if (step == 1)
+ 666   1                      {
+ 667   2                              step = 2;
+ 668   2                              P17_PushPull_Mode;
+ 669   2                              P17 = 1;
+ 670   2                              P15_PushPull_Mode;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 12  
+
+ 671   2                              P15 = 0;
+ 672   2                              P14_PushPull_Mode;
+ 673   2                              P14 = 1;
+ 674   2                              P13_PushPull_Mode;
+ 675   2                              P13 = 1;
+ 676   2                      }
+ 677   1                      else if (step == 2)
+ 678   1                      {
+ 679   2                              step = 3;
+ 680   2                              P17_PushPull_Mode;
+ 681   2                              P17 = 0;
+ 682   2                              P15_PushPull_Mode;
+ 683   2                              P15 = 0;
+ 684   2                              P14_PushPull_Mode;
+ 685   2                              P14 = 0;
+ 686   2                              P13_PushPull_Mode;
+ 687   2                              P13 = 0;
+ 688   2                      }
+ 689   1                      else if (step == 3)
+ 690   1                      {
+ 691   2                              step = 0;
+ 692   2                              P17_PushPull_Mode;
+ 693   2                              P17 = 0;
+ 694   2                              P15_PushPull_Mode;
+ 695   2                              P15 = 0;
+ 696   2                              P14_PushPull_Mode;
+ 697   2                              P14 = 0;
+ 698   2                              P13_PushPull_Mode;
+ 699   2                              P13 = 0;
+ 700   2                      }
+ 701   1                      #endif
+ 702   1                      
+ 703   1      }
+ 704          void RF_CK_LED_LEVEL7(unsigned char step)
+ 705          {
+ 706   1                      #if 1   // 7
+ 707   1                              
+ 708   1                              P17_Input_Mode;
+ 709   1                              P15_Input_Mode;
+ 710   1                              P14_Input_Mode;
+ 711   1                              P13_Input_Mode;
+ 712   1                      if (step == 4)
+ 713   1                      {
+ 714   2                              step = 1;
+ 715   2                              P17_PushPull_Mode;
+ 716   2                              P17 = 0;
+ 717   2                              P15_PushPull_Mode;
+ 718   2                              P15 = 1;
+ 719   2                              P14_PushPull_Mode;
+ 720   2                              P14 = 1;
+ 721   2                              P13_PushPull_Mode;
+ 722   2                              P13 = 1;
+ 723   2                      }
+ 724   1                      else if (step == 1)
+ 725   1                      {
+ 726   2                              P14_Input_Mode;
+ 727   2                              P14 = 1;
+ 728   2                              step = 2;
+ 729   2                              P17_PushPull_Mode;
+ 730   2                              P17 = 1;
+ 731   2                              P15_PushPull_Mode;
+ 732   2                              P15 = 0;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 13  
+
+ 733   2                              P14_PushPull_Mode;
+ 734   2                              P14 = 1;
+ 735   2                              P13_PushPull_Mode;
+ 736   2                              P13 = 1;
+ 737   2                      }
+ 738   1                      else if (step == 2)
+ 739   1                      {
+ 740   2                              P14_Input_Mode;
+ 741   2                              P14 = 1;
+ 742   2                              step = 3;
+ 743   2                              P17_PushPull_Mode;
+ 744   2                              P17 = 1;
+ 745   2                              P15_Input_Mode;
+ 746   2                              P15 = 0;
+ 747   2                              P14_PushPull_Mode;
+ 748   2                              P14 = 0;
+ 749   2                              P13_Input_Mode;
+ 750   2                              P13 = 0;
+ 751   2                      }
+ 752   1                      else if (step == 3)
+ 753   1                      {
+ 754   2                              step = 0;
+ 755   2                              P17_PushPull_Mode;
+ 756   2                              P17 = 0;
+ 757   2                              P15_PushPull_Mode;
+ 758   2                              P15 = 0;
+ 759   2                              P14_PushPull_Mode;
+ 760   2                              P14 = 0;
+ 761   2                              P13_PushPull_Mode;
+ 762   2                              P13 = 0;
+ 763   2                      }
+ 764   1                      #endif
+ 765   1                      
+ 766   1      }
+ 767          void RF_CK_LED_LEVEL8(unsigned char step)
+ 768          {
+ 769   1                      
+ 770   1                      #if 1   //8
+ 771   1                              
+ 772   1                              P17_Input_Mode;
+ 773   1                              P15_Input_Mode;
+ 774   1                              P14_Input_Mode;
+ 775   1                              P13_Input_Mode;
+ 776   1                      if (step == 4)
+ 777   1                      {
+ 778   2                              P17_PushPull_Mode;
+ 779   2                              P17 = 0;
+ 780   2                              P15_PushPull_Mode;
+ 781   2                              P15 = 1;
+ 782   2                              P14_PushPull_Mode;
+ 783   2                              P14 = 1;
+ 784   2                              P13_PushPull_Mode;
+ 785   2                              P13 = 1;
+ 786   2                      }
+ 787   1                      else if (step == 1)
+ 788   1                      {
+ 789   2                              P14_Input_Mode;
+ 790   2                              P14 = 1;
+ 791   2                              P17_PushPull_Mode;
+ 792   2                              P17 = 1;
+ 793   2                              P15_PushPull_Mode;
+ 794   2                              P15 = 0;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 14  
+
+ 795   2                              P14_PushPull_Mode;
+ 796   2                              P14 = 1;
+ 797   2                              P13_PushPull_Mode;
+ 798   2                              P13 = 1;
+ 799   2                      }
+ 800   1                      else if (step == 2)
+ 801   1                      {
+ 802   2                              P14_Input_Mode;
+ 803   2                              P14 = 1;
+ 804   2                              P17_PushPull_Mode;
+ 805   2                              P17 = 1;
+ 806   2                              P15_Input_Mode;
+ 807   2                              P15 = 0;
+ 808   2                              P14_PushPull_Mode;
+ 809   2                              P14 = 0;
+ 810   2                              P13_Input_Mode;
+ 811   2                              P13 = 0;
+ 812   2                      }
+ 813   1                      else if (step == 3)
+ 814   1                      {
+ 815   2                              P17_Input_Mode;
+ 816   2                              P17 = 1;
+ 817   2                              P15_PushPull_Mode;
+ 818   2                              P15 = 1;
+ 819   2                              P14_PushPull_Mode;
+ 820   2                              P14 = 0;
+ 821   2                              P13_PushPull_Mode;
+ 822   2                              P13 = 0;
+ 823   2                      }
+ 824   1                      #endif
+ 825   1      }
+ 826          void RF_CK_LED_LEVEL9(unsigned char step)
+ 827          {
+ 828   1              #if 1   //9
+ 829   1                      
+ 830   1                              P17_Input_Mode;
+ 831   1                              P15_Input_Mode;
+ 832   1                              P14_Input_Mode;
+ 833   1                              P13_Input_Mode;
+ 834   1                      if (step == 4)
+ 835   1                      {
+ 836   2                              step = 1;
+ 837   2                              P17_PushPull_Mode;
+ 838   2                              P17 = 0;
+ 839   2                              P15_PushPull_Mode;
+ 840   2                              P15 = 1;
+ 841   2                              P14_PushPull_Mode;
+ 842   2                              P14 = 1;
+ 843   2                              P13_PushPull_Mode;
+ 844   2                              P13 = 1;
+ 845   2                      }
+ 846   1                      else if (step == 1)
+ 847   1                      {
+ 848   2                              P14_Input_Mode;
+ 849   2                              P14 = 1;
+ 850   2                              step = 2;
+ 851   2                              P17_PushPull_Mode;
+ 852   2                              P17 = 1;
+ 853   2                              P15_PushPull_Mode;
+ 854   2                              P15 = 0;
+ 855   2                              P14_PushPull_Mode;
+ 856   2                              P14 = 1;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 15  
+
+ 857   2                              P13_PushPull_Mode;
+ 858   2                              P13 = 1;
+ 859   2                      }
+ 860   1                      else if (step == 2)
+ 861   1                      {
+ 862   2                              P14_Input_Mode;
+ 863   2                              P14 = 1;
+ 864   2                              step = 3;
+ 865   2                              P17_PushPull_Mode;
+ 866   2                              P17 = 1;
+ 867   2                              P15_Input_Mode;
+ 868   2                              P15 = 0;
+ 869   2                              P14_PushPull_Mode;
+ 870   2                              P14 = 0;
+ 871   2                              P13_Input_Mode;
+ 872   2                              P13 = 0;
+ 873   2                      }
+ 874   1                      else if (step == 3)
+ 875   1                      {
+ 876   2                              step = 0;
+ 877   2                              P17_Input_Mode;
+ 878   2                              P17 = 1;
+ 879   2                              P15_PushPull_Mode;
+ 880   2                              P15 = 1;
+ 881   2                              P14_PushPull_Mode;
+ 882   2                              P14 = 0;
+ 883   2                              P13_PushPull_Mode;
+ 884   2                              P13 = 1;
+ 885   2                      }
+ 886   1                      #endif
+ 887   1                      
+ 888   1      }
+ 889          void RF_CK_LED_LEVEL10(unsigned char step)
+ 890          {
+ 891   1                      #if 1   //10
+ 892   1                              P17_Quasi_Mode;
+ 893   1                              P15_Quasi_Mode;
+ 894   1                              P14_Quasi_Mode;
+ 895   1                              P13_Quasi_Mode; 
+ 896   1                      if (step == 4)
+ 897   1                      {
+ 898   2                              P17 = 0;                        
+ 899   2                              P13_PushPull_Mode;
+ 900   2                              P13 = 0;
+ 901   2                              P15_Input_Mode;
+ 902   2                              P15 = 0;
+ 903   2                              P14_Input_Mode;
+ 904   2                              P14 = 0;
+ 905   2                              step = 1;
+ 906   2                              P17_PushPull_Mode;
+ 907   2                              P17 = 1;
+ 908   2                              P15_PushPull_Mode;
+ 909   2                              P15 = 0;
+ 910   2                              P14_PushPull_Mode;
+ 911   2                              P14 = 1;
+ 912   2                              P13_PushPull_Mode;
+ 913   2                              P13 = 1;
+ 914   2                      }
+ 915   1                      else if (step == 1)
+ 916   1                      {
+ 917   2                              P17 = 0;
+ 918   2                              step = 2;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 16  
+
+ 919   2                              P17_PushPull_Mode;
+ 920   2                              P17 = 1;
+ 921   2                              P15_PushPull_Mode;
+ 922   2                              P15 = 1;
+ 923   2                              P14_PushPull_Mode;
+ 924   2                              P14 = 0;
+ 925   2                              P13_PushPull_Mode;
+ 926   2                              P13 = 1;
+ 927   2                      }
+ 928   1                      else if (step == 2)
+ 929   1                      {
+ 930   2                              step = 3;
+ 931   2                              P17_PushPull_Mode;
+ 932   2                              P17 = 1;
+ 933   2                              P15_PushPull_Mode;
+ 934   2                              P15 = 1;                        
+ 935   2                              P14_Input_Mode;
+ 936   2                              P14 = 1;
+ 937   2                              P13_PushPull_Mode;
+ 938   2                              P13 = 0;
+ 939   2                      }
+ 940   1                      else if (step == 3)
+ 941   1                      {
+ 942   2                              step = 0;
+ 943   2                              P17_PushPull_Mode;
+ 944   2                              P17 = 0;
+ 945   2                              P15_PushPull_Mode;
+ 946   2                              P15 = 1;
+ 947   2                              P14_PushPull_Mode;
+ 948   2                              P14 = 1;
+ 949   2                              P13_PushPull_Mode;
+ 950   2                              P13 = 1;
+ 951   2                      }
+ 952   1                      #endif
+ 953   1                      
+ 954   1      }
+ 955          
+ 956          void setTenLedLevel(void)
+ 957          {
+ 958   1              if (RF_CK_LED_Level == 0)
+ 959   1              {
+ 960   2                      P15 = 0;
+ 961   2                      P14 = 0;
+ 962   2                      P13 = 0;
+ 963   2                      P17 = 0;
+ 964   2              }
+ 965   1              else if (RF_CK_LED_Level == 1)
+ 966   1              {
+ 967   2                      RF_CK_LED_LEVEL1(RF_CK_LED_display_step);
+ 968   2              }
+ 969   1              else if (RF_CK_LED_Level == 2)
+ 970   1              {
+ 971   2                      RF_CK_LED_LEVEL2(RF_CK_LED_display_step);
+ 972   2              }
+ 973   1              else if (RF_CK_LED_Level == 3)
+ 974   1              {
+ 975   2                      RF_CK_LED_LEVEL3(RF_CK_LED_display_step);
+ 976   2              }
+ 977   1              else if (RF_CK_LED_Level == 4)
+ 978   1              {
+ 979   2                      RF_CK_LED_LEVEL4(RF_CK_LED_display_step);
+ 980   2              }
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 17  
+
+ 981   1              else if (RF_CK_LED_Level == 5)
+ 982   1              {
+ 983   2                      RF_CK_LED_LEVEL5(RF_CK_LED_display_step);
+ 984   2              }
+ 985   1              else if (RF_CK_LED_Level == 6)
+ 986   1              {
+ 987   2                      RF_CK_LED_LEVEL6(RF_CK_LED_display_step);
+ 988   2              }
+ 989   1              else if (RF_CK_LED_Level == 7)
+ 990   1              {
+ 991   2                      RF_CK_LED_LEVEL7(RF_CK_LED_display_step);
+ 992   2              }
+ 993   1              else if (RF_CK_LED_Level == 8)
+ 994   1              {
+ 995   2                      RF_CK_LED_LEVEL8(RF_CK_LED_display_step);
+ 996   2              }
+ 997   1              else if (RF_CK_LED_Level == 9)
+ 998   1              {
+ 999   2                      RF_CK_LED_LEVEL9(RF_CK_LED_display_step);
+1000   2              }
+1001   1              else if (RF_CK_LED_Level == 10)
+1002   1              {
+1003   2                      RF_CK_LED_LEVEL10(RF_CK_LED_display_step);
+1004   2              }
+1005   1      
+1006   1              RF_CK_LED_display_step++;
+1007   1              if (RF_CK_LED_display_step > 4)
+1008   1              {
+1009   2                      RF_CK_LED_display_step = 1;
+1010   2              }
+1011   1      }
+1012          
+1013          /*                              RF Level                */
+1014          unsigned char getRFLevel(void)
+1015          {
+1016   1              float adctemp;
+1017   1              CKDIV = 0x04;
+1018   1              clr_ADCF;
+1019   1              set_ADCS;
+1020   1              while(ADCF == 0);
+1021   1              CKDIV = 0x00;
+1022   1              adctemp = (ADCRH<<4) + ADCRL;
+1023   1              adctemp = adctemp/4096.0 * VDD_Voltage;
+1024   1              /*if (adctemp > 2380)
+1025   1              {
+1026   1                      return 24;
+1027   1              }
+1028   1              else if (adctemp > 2280)
+1029   1              {
+1030   1                      return 23;
+1031   1              }
+1032   1              else if (adctemp > 2180)
+1033   1              {
+1034   1                      return 22;
+1035   1              }
+1036   1              else if (adctemp > 2080)
+1037   1              {
+1038   1                      return 21;
+1039   1              }
+1040   1              else if (adctemp > 1980)
+1041   1              {
+1042   1                      return 20;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 18  
+
+1043   1              }
+1044   1              else if (adctemp > 1880)
+1045   1              {
+1046   1                      return 19;
+1047   1              }
+1048   1              else if (adctemp > 1780)
+1049   1              {
+1050   1                      return 18;
+1051   1              }
+1052   1              else if (adctemp > 1680)
+1053   1              {
+1054   1                      return 17;
+1055   1              }
+1056   1              else if (adctemp > 1580)
+1057   1              {
+1058   1                      return 16;
+1059   1              }
+1060   1              else if (adctemp > 1480)
+1061   1              {
+1062   1                      return 15;
+1063   1              }       
+1064   1              else if (adctemp > 1380)
+1065   1              {
+1066   1                      return 14;
+1067   1              }       
+1068   1              else if (adctemp > 1280)
+1069   1              {
+1070   1                      return 13;
+1071   1              }       
+1072   1              else if (adctemp > 1180)
+1073   1              {
+1074   1                      return 12;
+1075   1              }       
+1076   1              else if (adctemp > 1080)
+1077   1              {
+1078   1                      return 11;
+1079   1              }               
+1080   1              else*/ if (adctemp > 1200)
+1081   1              {
+1082   2                      return 10;
+1083   2              }
+1084   1              else if (adctemp > 1120)
+1085   1              {
+1086   2                      return 9;
+1087   2              }
+1088   1              else if (adctemp > 1040)
+1089   1              {
+1090   2                      return 8;
+1091   2              }       
+1092   1              else if (adctemp > 920)
+1093   1              {
+1094   2                      return 7;
+1095   2              }       
+1096   1              else if (adctemp > 840)
+1097   1              {
+1098   2                      return 6;
+1099   2              }       
+1100   1              else if (adctemp > 740)
+1101   1              {
+1102   2                      return 5;
+1103   2              }
+1104   1              else if (adctemp > 640)
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 19  
+
+1105   1              {
+1106   2                      return 4;
+1107   2              }       
+1108   1              else if (adctemp > 540)
+1109   1              {
+1110   2                      return 3;
+1111   2              }       
+1112   1              else if (adctemp > 480)
+1113   1              {
+1114   2                      return 2;
+1115   2              }       
+1116   1              else if (adctemp > 80)
+1117   1              {
+1118   2                      return 1;
+1119   2              }
+1120   1              return 0;
+1121   1      }
+1122          
+1123          void setPWM_BUZZRE(unsigned char status)
+1124          {
+1125   1              if (status == 0)
+1126   1              {
+1127   2                      PWM0_P12_OUTPUT_DISABLE;
+1128   2                      BUZZER_CLR_RUN
+1129   2              }
+1130   1              else
+1131   1              {
+1132   2                      PWM0_P12_OUTPUT_ENABLE;
+1133   2                      PWM_CLOCK_FSYS;
+1134   2                      PWMPH = 0x19;
+1135   2                      PWMPL = 0x09;   //2.4K=sys/(pwmph,pwmpl)
+1136   2                      set_SFRPAGE;
+1137   2                      PWM0H = 0x12;
+1138   2                      PWM0L = 0x04;
+1139   2                      clr_SFRPAGE;
+1140   2                      //-------- PWM start run--------------
+1141   2                      set_LOAD;
+1142   2                      set_PWMRUN;     
+1143   2              }
+1144   1      }
+1145          
+1146          void checkbyself(void)
+1147          {
+1148   1              RF_CK_LED_Level = 10;
+1149   1              RF_CK_LED_display_step = 1;
+1150   1              RF_SET_LED
+1151   1              CK_SET_LED
+1152   1              MOTOR_SET_RUN
+1153   1              BUZZER_CLR_RUN
+1154   1              P11_PushPull_Mode;
+1155   1              P11 = 1;
+1156   1      //      setSixLedFreq(1,100);
+1157   1              systime_cnt = 0;
+1158   1              while(systime_cnt < 100);
+1159   1              CK_CLR_LED;
+1160   1              MOTOR_CLR_RUN
+1161   1              BUZZER_CLR_RUN
+1162   1              
+1163   1              P11 = 0;
+1164   1      //      setSixLedFreq(0,0);
+1165   1              RF_CK_LED_Level = 0;
+1166   1              RF_CK_LED_display_step = 1;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 20  
+
+1167   1      }
+1168          
+1169          void RF_CK_Process(unsigned char valuetemp)
+1170          {
+1171   1              if (valuetemp& 0x01)
+1172   1              {
+1173   2                      /*      short key       */
+1174   2                      if (MOTOR_BUZZER_MODE == BUZZER_MODE)
+1175   2                      {
+1176   3                              MOTOR_BUZZER_MODE = MOTOR_MODE;
+1177   3                              if (RF_CK_RUN_CNT > 0)
+1178   3                              {
+1179   4                                      MOTOR_SET_RUN;
+1180   4                                      setPWM_BUZZRE(0);
+1181   4      //                                              BUZZER_CLR_RUN;
+1182   4                              }
+1183   3                      }
+1184   2                      else
+1185   2                      {
+1186   3                              MOTOR_BUZZER_MODE = BUZZER_MODE;
+1187   3                              if (RF_CK_RUN_CNT > 0)
+1188   3                              {
+1189   4                                      MOTOR_CLR_RUN;
+1190   4                                      setPWM_BUZZRE(1);
+1191   4      //                                              BUZZER_SET_RUN;
+1192   4                              }
+1193   3                      }
+1194   2              }
+1195   1              else if (valuetemp & 0x02)
+1196   1              {
+1197   2                      /*      long key        */
+1198   2                      if (RF_CK_MODE == RF_MODE)
+1199   2                      {
+1200   3                              RF_CK_MODE = CK_MODE;
+1201   3                              CK_SET_LED;
+1202   3                              RF_CLR_LED;
+1203   3                      }
+1204   2                      else
+1205   2                      {
+1206   3                              RF_CK_MODE = RF_MODE;
+1207   3                              CK_CLR_LED;
+1208   3                              RF_SET_LED;
+1209   3                      }
+1210   2                      RF_Level = 0;
+1211   2              }
+1212   1      }
+1213          
+1214          //========================================================================================================
+1215          void main(void)
+1216          {
+1217   1              unsigned char valuetemp;
+1218   1          Set_All_GPIO_Quasi_Mode;
+1219   1              /*init 5ms timer        */
+1220   1              systime_cnt = 0;
+1221   1              Timer0_Init();
+1222   1              Timer1_Init();  
+1223   1              P13_PushPull_Mode;
+1224   1              P14_PushPull_Mode;
+1225   1              P15_PushPull_Mode;
+1226   1              P17_PushPull_Mode;      
+1227   1              valuetemp = 0;
+1228   1              systime_cnt = 0;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 21  
+
+1229   1              get_battery_power();
+1230   1              RF_ADC_INPUT_INIT;
+1231   1              checkbyself();  
+1232   1              MODE_SWITCH_KEY_INIT
+1233   1              SIX_LED_KEY_INIT
+1234   1              CK_INPUT_INIT
+1235   1              RF_CK_MODE = RF_MODE;
+1236   1              RF_CK_ISLONGPRESS = 0;
+1237   1              MOTOR_BUZZER_MODE = BUZZER_MODE;
+1238   1              SIX_LED_ON_OFF = OFF;
+1239   1              SIX_LED_ISLONGPRESS = 0;
+1240   1              SIX_LED_Freq = 0;
+1241   1              isSIX_LED_ENTER_FLASH_MODE = 0;
+1242   1              RF_CK_LED_Level = 0;
+1243   1              RF_CK_LED_display_step = 1;
+1244   1              RF_CK_RUN_CNT = 0;
+1245   1              RF_Level = 0;
+1246   1              
+1247   1              SIX_LED_display_time = 0;
+1248   1              SIX_LED_KEY_LONG_PRESS_CNT = 200;
+1249   1              RF_Level_add_cnt = 0;
+1250   1              RF_Level_del_cnt = 0;
+1251   1          while (1)
+1252   1              {
+1253   2                      if (is_5ms_Flag)
+1254   2                      {
+1255   3                              is_5ms_Flag = 0;
+1256   3                              //check RF CK MODE KEY
+1257   3                              valuetemp = get_RF_CK_Key();
+1258   3                              RF_CK_Process(valuetemp);
+1259   3                              
+1260   3                              valuetemp = get_SIX_LED_Key();
+1261   3                              #if 1
+1262   3                              /*
+1263   3                              0: Normal off
+1264   3                              1: Normal on
+1265   3                              2: Normal off
+1266   3                              0x81: 1HZ flash on;0x91:1HZ flash off
+1267   3                              0x82: 2hz flash on;0x92:2HZ flash off
+1268   3                              0x83: 3hz flash on;0x93:3HZ flash off
+1269   3                              0x85: 5hz flash on;0x95:5HZ flash off
+1270   3                              0x87: 7hz flash on;0x97:7HZ flash off
+1271   3                              0x8A: 10hz flash on;0x9A:10HZ flash off
+1272   3                              */
+1273   3                              if (valuetemp == 1)
+1274   3                              {
+1275   4                                      if (SIX_LED_ON_OFF == OFF)
+1276   4                                      {
+1277   5                                              SIX_LED_ON_OFF = ON;
+1278   5                                              if (SIX_LED_Freq == 0)
+1279   5                                              {
+1280   6                                                      SIX_LED_Freq = 1;
+1281   6                                                      isSIX_LED_ENTER_FLASH_MODE = 0;
+1282   6                                              }
+1283   5                                              else if (SIX_LED_Freq & 0x80)
+1284   5                                              {
+1285   6                                                      SIX_LED_display_time = 100 / (SIX_LED_Freq & 0x0F);
+1286   6                                                      isSIX_LED_ENTER_FLASH_MODE = 1;
+1287   6                                              }
+1288   5                                              P11_PushPull_Mode;
+1289   5                                              P11 = 1;
+1290   5                                      }
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 22  
+
+1291   4                                      else
+1292   4                                      {
+1293   5                                              P11 = 0;
+1294   5                                              SIX_LED_ON_OFF = OFF;
+1295   5                                              if (SIX_LED_Freq == 1)
+1296   5                                              {
+1297   6                                                      SIX_LED_Freq = 0;
+1298   6                                              }
+1299   5                                      }
+1300   4                              }
+1301   3                              else if (valuetemp == 2)
+1302   3                              {
+1303   4                                      if (SIX_LED_ON_OFF == ON)
+1304   4                                      {
+1305   5                                              if (SIX_LED_Freq == 1)
+1306   5                                              {
+1307   6                                                      SIX_LED_Freq = 0x80;
+1308   6      //                                              SIX_LED_ON_OFF = OFF;
+1309   6                                                      isSIX_LED_ENTER_FLASH_MODE = 0;
+1310   6                                                      P11 = 0;
+1311   6                                                      SIX_LED_KEY_LONG_PRESS_CNT = 100;
+1312   6                                              }
+1313   5      //                                      else if (SIX_LED_Freq == 0x80)
+1314   5      //                                      {
+1315   5      //                                              SIX_LED_Freq = 0x81;
+1316   5      //                                              SIX_LED_ON_OFF = ON;
+1317   5      //                                              isSIX_LED_ENTER_FLASH_MODE = 1;
+1318   5      //                                              SIX_LED_display_time = 100 / (SIX_LED_Freq & 0x0F);
+1319   5      //                                              P11 = 1;
+1320   5      //                                              SIX_LED_KEY_LONG_PRESS_CNT = 200;
+1321   5      //                                      }
+1322   5                                              else if ((SIX_LED_Freq & 0x8F) == 0x80)
+1323   5                                              {
+1324   6                                                      SIX_LED_Freq = 0x82;
+1325   6                                                      SIX_LED_ON_OFF = ON;
+1326   6                                                      isSIX_LED_ENTER_FLASH_MODE = 1;
+1327   6                                                      SIX_LED_display_time = 100 / (SIX_LED_Freq & 0x0F);
+1328   6                                                      P11 = 1;
+1329   6                                                      SIX_LED_KEY_LONG_PRESS_CNT = 200;
+1330   6                                              }
+1331   5                                              else if ((SIX_LED_Freq & 0x8F) == 0x82)
+1332   5                                              {
+1333   6                                                      SIX_LED_Freq = 0x83;
+1334   6                                                      SIX_LED_ON_OFF = ON;
+1335   6                                                      isSIX_LED_ENTER_FLASH_MODE = 1;
+1336   6                                                      SIX_LED_display_time = 100 / (SIX_LED_Freq & 0x0F);
+1337   6                                                      P11 = 1;
+1338   6                                                      SIX_LED_KEY_LONG_PRESS_CNT = 200;
+1339   6                                              }
+1340   5                                              else if ((SIX_LED_Freq & 0x8F) == 0x83)
+1341   5                                              {
+1342   6                                                      SIX_LED_Freq = 0x85;
+1343   6                                                      SIX_LED_ON_OFF = ON;
+1344   6                                                      isSIX_LED_ENTER_FLASH_MODE = 1;
+1345   6                                                      SIX_LED_display_time = 100 / (SIX_LED_Freq & 0x0F);
+1346   6                                                      P11 = 1;
+1347   6                                                      SIX_LED_KEY_LONG_PRESS_CNT = 200;
+1348   6                                              }
+1349   5                                              else if ((SIX_LED_Freq & 0x8F) == 0x85)
+1350   5                                              {
+1351   6                                                      SIX_LED_Freq = 0x87;
+1352   6                                                      SIX_LED_ON_OFF = ON;
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 23  
+
+1353   6                                                      isSIX_LED_ENTER_FLASH_MODE = 1;
+1354   6                                                      SIX_LED_display_time = 100 / (SIX_LED_Freq & 0x0F);
+1355   6                                                      P11 = 1;
+1356   6                                                      SIX_LED_KEY_LONG_PRESS_CNT = 200;
+1357   6                                              }
+1358   5                                              else if ((SIX_LED_Freq & 0x8F) == 0x87)
+1359   5                                              {
+1360   6                                                      SIX_LED_Freq = 0x8A;
+1361   6                                                      SIX_LED_ON_OFF = ON;
+1362   6                                                      isSIX_LED_ENTER_FLASH_MODE = 1;
+1363   6                                                      SIX_LED_display_time = 100 / (SIX_LED_Freq & 0x0F);
+1364   6                                                      P11 = 1;
+1365   6                                                      SIX_LED_KEY_LONG_PRESS_CNT = 200;
+1366   6                                              }
+1367   5                                              else if ((SIX_LED_Freq & 0x8F) == 0x8A)
+1368   5                                              {
+1369   6                                                      SIX_LED_Freq = 1;
+1370   6                                                      SIX_LED_ON_OFF = ON;
+1371   6                                                      isSIX_LED_ENTER_FLASH_MODE = 0;
+1372   6                                                      SIX_LED_display_time = 100 / (SIX_LED_Freq & 0x0F);
+1373   6                                                      P11 = 1;
+1374   6                                                      SIX_LED_KEY_LONG_PRESS_CNT = 200;
+1375   6                                              }
+1376   5                                      }
+1377   4                              }
+1378   3                              else if (valuetemp == 4)
+1379   3                              {
+1380   4                                      if (SIX_LED_Freq == 0x80)
+1381   4                                      {
+1382   5                                              SIX_LED_Freq = 0;
+1383   5                                              isSIX_LED_ENTER_FLASH_MODE = 0;
+1384   5                                              P11 = 0;
+1385   5                                              SIX_LED_display_time = 0;
+1386   5                                              SIX_LED_ON_OFF = OFF;
+1387   5                                      }
+1388   4                              }
+1389   3                              if (SIX_LED_ON_OFF == ON)
+1390   3                              {
+1391   4                                      if (isSIX_LED_ENTER_FLASH_MODE == 1)
+1392   4                                      {
+1393   5                                              if (SIX_LED_display_time > 0)
+1394   5                                                      SIX_LED_display_time--;
+1395   5                                              if (SIX_LED_display_time == 0)
+1396   5                                              {
+1397   6                                                      P11^=1;
+1398   6                                                      SIX_LED_display_time = 100 / (SIX_LED_Freq & 0x0F);
+1399   6                                              }
+1400   5                                      }
+1401   4                                      else
+1402   4                                      {
+1403   5                                      }
+1404   4                              }
+1405   3                              #endif
+1406   3                              #if 0
+                                      if (valuetemp & 0x01)
+                                      {
+                                              // six led turn on or turn off
+                                              if (SIX_LED_ON_OFF == OFF)
+                                              {
+                                                      SIX_LED_ON_OFF = ON;
+                                                      if (SIX_LED_Freq < 2)
+                                                      {
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 24  
+
+                                                              SIX_LED_Freq = 0;
+                                                              setSixLedFreq(0,100);
+                                                              isSIX_LED_ENTER_FLASH_MODE = 0;
+                                                      }
+                                                      else
+                                                      {
+                                                              setSixLedFreq(SIX_LED_Freq,50);
+                                                              isSIX_LED_ENTER_FLASH_MODE = 1;
+                                                      }
+                                              }
+                                              else
+                                              {
+                                                      SIX_LED_ON_OFF = OFF;
+                                                      isSIX_LED_ENTER_FLASH_MODE = 0;
+                                                      setSixLedFreq(0,0);
+                                              }
+                                      }
+                                      else if (valuetemp & 0x02)
+                                      {
+                                              /*      long press:change freq level    */
+                                              if (SIX_LED_ON_OFF == ON)
+                                              {
+                                                      isSIX_LED_ENTER_FLASH_MODE = 1;
+                                                      if (SIX_LED_Freq == 0)  //1HZ turn on
+                                                      {
+                                                              setSixLedFreq(0,100);
+                                                      }
+                                                      else if (SIX_LED_Freq == 1)
+                                                      {
+                                                              setSixLedFreq(0,0);
+                                                      }
+                                                      else if (SIX_LED_Freq >=2)
+                                                      {
+                                                              setSixLedFreq(SIX_LED_Freq,50);
+                                                      }
+                                                      SIX_LED_Freq += 1;
+                                                      if (SIX_LED_Freq > 12)
+                                                      {
+                                                              SIX_LED_Freq = 0;
+                                                              SIX_LED_ON_OFF = OFF;
+                                                              setSixLedFreq(0,100);
+                                                      }
+                                              }
+                                              else
+                                              {
+                                                      if (isSIX_LED_ENTER_FLASH_MODE == 1)
+                                                      {
+                                                              SIX_LED_ON_OFF = ON;
+                                                              setSixLedFreq(SIX_LED_Freq,100);
+                                                      }
+                                              }
+                                      }
+                                      else if (valuetemp & 0x04)
+                                      {
+                                              //long press release
+                                              if (SIX_LED_Freq == 2)
+                                              {
+                                                      SIX_LED_ON_OFF = OFF;
+                                                      SIX_LED_Freq = 0;
+                                              }
+                                              if (SIX_LED_ON_OFF == OFF)
+                                              {
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 25  
+
+                                                      isSIX_LED_ENTER_FLASH_MODE = 0;
+                                              }
+                                      }
+                                      #endif
+1481   3                              
+1482   3                              
+1483   3                              if (RF_CK_MODE == RF_MODE)
+1484   3                              {
+1485   4                                      /*              check rf level  */
+1486   4                                      valuetemp = getRFLevel();
+1487   4                                      if (valuetemp != RF_Level)
+1488   4                                      {
+1489   5                                              if (valuetemp > RF_Level)
+1490   5                                              {
+1491   6                                                      RF_Level_add_cnt ++;
+1492   6                                                      RF_Level_del_cnt = 0;
+1493   6                                                      if (RF_Level_add_cnt > 0)       //2
+1494   6                                                      {
+1495   7                                                              RF_Level++;
+1496   7                                                              RF_Level_add_cnt = 0;
+1497   7                                                      }
+1498   6                                              }
+1499   5                                              else if (RF_Level > valuetemp)
+1500   5                                              {
+1501   6                                                      RF_Level_del_cnt ++;
+1502   6                                                      RF_Level_add_cnt = 0;
+1503   6                                                      if (RF_Level_del_cnt > 0)       //2
+1504   6                                                      {
+1505   7                                                              RF_Level--;
+1506   7                                                              RF_Level_del_cnt = 0;
+1507   7                                                      }
+1508   6                                              }
+1509   5                                      
+1510   5                                      }
+1511   4                                      else
+1512   4                                      {
+1513   5                                              RF_Level_add_cnt = 0;
+1514   5                                              RF_Level_del_cnt = 0;
+1515   5                                      }
+1516   4                              }
+1517   3                              else 
+1518   3                              {
+1519   4                                      /*              check ck level  */
+1520   4                                      if (P30 == 1)
+1521   4                                      {
+1522   5                                              RF_Level = 10;
+1523   5                                      }
+1524   4                                      else 
+1525   4                                              RF_Level = 0;
+1526   4                              }
+1527   3                              if (RF_CK_LED_Level != RF_Level)
+1528   3                              {
+1529   4                                      RF_CK_LED_display_step = 1;
+1530   4                                      RF_CK_LED_Level = RF_Level;
+1531   4                              }
+1532   3                              if (RF_Level >= 7)
+1533   3                              {
+1534   4                                      RF_CK_RUN_CNT = 20;
+1535   4                                      if (Buzzer_Motor_isRun == 0)
+1536   4                                      {
+1537   5                                              if (MOTOR_BUZZER_MODE == BUZZER_MODE)
+1538   5                                              {
+C51 COMPILER V9.54   MIAN                                                                  06/26/2019 21:40:29 PAGE 26  
+
+1539   6                                                      MOTOR_CLR_RUN;
+1540   6                                                      setPWM_BUZZRE(1);
+1541   6      //                                              BUZZER_SET_RUN;
+1542   6                                              }
+1543   5                                              else
+1544   5                                              {
+1545   6                                                      MOTOR_SET_RUN;
+1546   6                                                      setPWM_BUZZRE(0);
+1547   6      //                                              BUZZER_CLR_RUN;
+1548   6                                              }
+1549   5                                      }
+1550   4                                      Buzzer_Motor_isRun = 1;
+1551   4                              }
+1552   3                              else
+1553   3                              {
+1554   4      //                              Buzzer_Motor_isRun = 0;
+1555   4                              }
+1556   3                              
+1557   3                              if (RF_CK_RUN_CNT > 0)
+1558   3                              {
+1559   4                                      RF_CK_RUN_CNT -- ;
+1560   4                                      if (RF_CK_RUN_CNT == 0)
+1561   4                                      {
+1562   5                                              MOTOR_CLR_RUN
+1563   5                                              setPWM_BUZZRE(0);
+1564   5      //                                      BUZZER_CLR_RUN
+1565   5                                              Buzzer_Motor_isRun = 0;
+1566   5                                      }
+1567   4                              }
+1568   3                      }
+1569   2              }
+1570   1      }
+1571          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   3879    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     27      16
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      8    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
