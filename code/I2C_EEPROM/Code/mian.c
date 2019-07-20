@@ -363,10 +363,10 @@ void setSixLedFreq(unsigned char freq,unsigned char duty)
 void RF_CK_LED_LEVEL1(unsigned char step)
 {
 		#if 1	// 1
-		P17_Quasi_Mode;
-		P15_Quasi_Mode;
-		P14_Quasi_Mode;
-		P13_Quasi_Mode;
+//		P17_Quasi_Mode;
+//		P15_Quasi_Mode;
+//		P14_Quasi_Mode;
+//		P13_Quasi_Mode;
 		if (step == 4)
 		{
 			P17_Input_Mode;
@@ -380,9 +380,9 @@ void RF_CK_LED_LEVEL1(unsigned char step)
 		}
 		else if (step == 1)
 		{
-			P17_PushPull_Mode;
+			P17_Input_Mode;
 			P17 = 1;
-			P15_PushPull_Mode;
+			P15_Input_Mode;
 			P15 = 1;
 			P14_Input_Mode;
 			P14 = 1;
@@ -393,7 +393,7 @@ void RF_CK_LED_LEVEL1(unsigned char step)
 		{
 			P17_Input_Mode;
 			P17 = 1;
-			P15_PushPull_Mode;
+			P15_Input_Mode;
 			P15 = 1;
 			P14_Input_Mode;
 			P14 = 1;
@@ -402,13 +402,14 @@ void RF_CK_LED_LEVEL1(unsigned char step)
 		}
 		else if (step == 3)
 		{
-			P17 = 0;
 			P15_PushPull_Mode;
 			P15 = 1;
 			P14_Input_Mode;
 			P14 = 1;
 			P13_Input_Mode;
 			P13 = 1; 
+			P17_PushPull_Mode;
+			P17 = 0;
 		}
 		
 		#endif
@@ -417,10 +418,10 @@ void RF_CK_LED_LEVEL2(unsigned char step)
 {
 		#if 1	// 2
 			
-			P17_Quasi_Mode;
-			P15_Quasi_Mode;
-			P14_Quasi_Mode;
-			P13_Quasi_Mode;
+//			P17_Quasi_Mode;
+//			P15_Quasi_Mode;
+//			P14_Quasi_Mode;
+//			P13_Quasi_Mode;
 		if (step == 4)
 		{
 			P17_PushPull_Mode;
@@ -456,6 +457,7 @@ void RF_CK_LED_LEVEL2(unsigned char step)
 		}
 		else if (step == 3)
 		{
+			P17_PushPull_Mode;
 			P17 = 0;
 			P15_PushPull_Mode;
 			P15 = 1;
@@ -469,16 +471,11 @@ void RF_CK_LED_LEVEL2(unsigned char step)
 void RF_CK_LED_LEVEL3(unsigned char step)
 {
 		#if 1	//3
-			
-			P17_Quasi_Mode;
-			P15_Quasi_Mode;
-			P14_Quasi_Mode;
-			P13_Quasi_Mode;
+
 		if (step == 4)
 		{
-			step = 1;
-			P15_PushPull_Mode;
-			P17 = 0;
+			P17_PushPull_Mode;
+			P17 = 1;
 			P15_PushPull_Mode;
 			P15 = 1;
 			P14_PushPull_Mode;
@@ -488,54 +485,28 @@ void RF_CK_LED_LEVEL3(unsigned char step)
 		}
 		else if (step == 1)
 		{
-			step = 2;
-			P17_Input_Mode;
-			P17 = 0;
+			P17_PushPull_Mode;
+			P17 = 1;
 			P15_PushPull_Mode;
 			P15 = 1;
 			P14_Input_Mode;
-			P14 = 0;
+			P14 = 1;
 			P13_Input_Mode;
-			P13 = 0;
+			P13 = 1;
 		}
 		else if (step == 2)
 		{
-			step = 3;
 			P17_Input_Mode;
-			P17 = 0;
-			P15_Input_Mode;
-			P15 = 0;
+			P17 = 1;
+			P15_PushPull_Mode;
+			P15 = 1;
 			P14_Input_Mode;
-			P14 = 0;
+			P14 = 1;
 			P13_Input_Mode;
-			P13 = 0;
+			P13 = 1;
 		}
 		else if (step == 3)
 		{
-			step = 0;
-			P17_Input_Mode;
-			P17 = 0;
-			P15_PushPull_Mode;
-			P15 = 0;
-			P14_Input_Mode;
-			P14 = 0;
-			P13_PushPull_Mode;
-			P13 = 0;
-		}
-		#endif
-		
-}
-void RF_CK_LED_LEVEL4(unsigned char step)
-{
-		#if 1	//4
-			
-			P17_Quasi_Mode;
-			P15_Quasi_Mode;
-			P14_Quasi_Mode;
-			P13_Quasi_Mode;
-		if (step == 4)
-		{
-			step = 1;
 			P17_PushPull_Mode;
 			P17 = 0;
 			P15_PushPull_Mode;
@@ -545,8 +516,36 @@ void RF_CK_LED_LEVEL4(unsigned char step)
 			P13_PushPull_Mode;
 			P13 = 1;
 		}
+		#endif
+}
+void RF_CK_LED_LEVEL4(unsigned char step)
+{
+		#if 0	//4
+		if (step == 4)
+		{
+			P17_Input_Mode;
+			P15_Quasi_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
+			step = 1;
+			P17_PushPull_Mode;
+			P17 = 0;
+			P14_PushPull_Mode;
+			
+			P15 = 1;
+			P14 = 1;
+			P13_PushPull_Mode;
+			P13 = 1;
+			P15_PushPull_Mode;
+		}
 		else if (step == 1)
 		{
+			P17 = 1;
+			P14 = 1;
+			P17_Input_Mode;
+			P15_Input_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
 			step = 2;
 			P17_PushPull_Mode;
 			P17 = 1;
@@ -559,6 +558,10 @@ void RF_CK_LED_LEVEL4(unsigned char step)
 		}
 		else if (step == 2)
 		{
+			P17_Input_Mode;
+			P15_Input_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
 			step = 3;
 			P17_Input_Mode;
 			P17 = 0;
@@ -571,53 +574,130 @@ void RF_CK_LED_LEVEL4(unsigned char step)
 		}
 		else if (step == 3)
 		{
-			step = 0;
-			P17_Input_Mode;
-			P17 = 0;
+//			P17_Quasi_Mode;
+//			P15_Quasi_Mode;
+//			P14_Quasi_Mode;
+//			P13_Quasi_Mode;
+//			step = 0;
+//			P17_Input_Mode;
+//			P17 = 0;
+//			P15_Input_Mode;
+//			P15 = 0;
+//			P14_Input_Mode;
+//			P14 = 0;
+//			P13_Input_Mode;
+//			P13 = 0;
+		}
+		#endif
+		#if 1	//4
+
+		if (step == 4)
+		{
+			P17_PushPull_Mode;
+			P17 = 1;
+			P15_PushPull_Mode;
+			P15 = 1;
+			P14_PushPull_Mode;
+			P14 = 1;
+			P13_PushPull_Mode;
+			P13 = 1;
+		}
+		else if (step == 1)
+		{
+			P17_PushPull_Mode;
+			P17 = 1;
+			P14_Input_Mode;
+			P14 = 1;
+			P13_Input_Mode;
+			P13 = 1;
 			P15_PushPull_Mode;
 			P15 = 0;
+		}
+		else if (step == 2)
+		{
+			P17_Input_Mode;
+			P17 = 1;
+			P15_PushPull_Mode;
+			P15 = 1;
 			P14_Input_Mode;
-			P14 = 0;
+			P14 = 1;
+			P13_Input_Mode;
+			P13 = 1;
+		}
+		else if (step == 3)
+		{
+			P17_PushPull_Mode;
+			P17 = 0;
+			P15_PushPull_Mode;
+			P15 = 1;
+			P14_PushPull_Mode;
+			P14 = 1;
 			P13_PushPull_Mode;
-			P13 = 0;
+			P13 = 1;
 		}
 		#endif
 		
 }
 void RF_CK_LED_LEVEL5(unsigned char step)
 {
-		#if 1	//5
+		#if 0	//5
 			
-			P17_Quasi_Mode;
-			P15_Quasi_Mode;
-			P14_Quasi_Mode;
-			P13_Quasi_Mode;
+//			P17_Quasi_Mode;
+//			P15_Quasi_Mode;
+//			P14_Quasi_Mode;
+//			P13_Quasi_Mode;
 		if (step == 4)
 		{
+//			P17_Input_Mode;
+//			P15_Input_Mode;
+//			P14_Input_Mode;
+//			P13_Input_Mode;
+//			step = 1;
+//			P17_PushPull_Mode;
+//			P17 = 0;
+//			P15_PushPull_Mode;
+//			P14_PushPull_Mode;
+//			P15 = 1;
+//			P14 = 1;
+//			P13_PushPull_Mode;
+//			P13 = 1;
+			P17_Input_Mode;
+			P15_Quasi_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
 			step = 1;
 			P17_PushPull_Mode;
 			P17 = 0;
-			P15_PushPull_Mode;
-			P15 = 1;
 			P14_PushPull_Mode;
+			
+			P15 = 1;
 			P14 = 1;
 			P13_PushPull_Mode;
 			P13 = 1;
+			P15_PushPull_Mode;
 		}
 		else if (step == 1)
 		{
+			P17_Input_Mode;
+			P15_Input_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
 			step = 2;
-			P17_PushPull_Mode;
-			P17 = 1;
 			P15_PushPull_Mode;
 			P15 = 0;
-			P14_PushPull_Mode;
-			P14 = 1;
 			P13_Input_Mode;
 			P13 = 0;
+			P17_PushPull_Mode;
+			P14_PushPull_Mode;
+			P17 = 1;
+			P14 = 1;
 		}
 		else if (step == 2)
 		{
+			P17_Input_Mode;
+			P15_Input_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
 			step = 3;
 			P17_PushPull_Mode;
 			P17 = 0;
@@ -630,52 +710,130 @@ void RF_CK_LED_LEVEL5(unsigned char step)
 		}
 		else if (step == 3)
 		{
-			step = 0;
+//			P17_Input_Mode;
+//			P15_Input_Mode;
+//			P14_Input_Mode;
+//			P13_Input_Mode;
+//			step = 0;
+//			P17_PushPull_Mode;
+//			P17 = 0;
+//			P15_PushPull_Mode;
+//			P15 = 0;
+//			P14_PushPull_Mode;
+//			P14 = 0;
+//			P13_PushPull_Mode;
+//			P13 = 0;
+		}
+		#endif
+		#if 1	//5
+
+		if (step == 4)
+		{
+			P17_PushPull_Mode;
+			P17 = 1;
+			P15_PushPull_Mode;
+			P15 = 1;
+			P14_PushPull_Mode;
+			P14 = 1;
+			P13_PushPull_Mode;
+			P13 = 1;
+		}
+		else if (step == 1)
+		{
+			P17_PushPull_Mode;
+			P17 = 1;
+			P17_PushPull_Mode;
+			P14 = 1;
+			P13_Input_Mode;
+			P13 = 1;
+			P15_PushPull_Mode;
+			P15 = 0;
+		}
+		else if (step == 2)
+		{
+			P17_Input_Mode;
+			P17 = 1;
+			P15_PushPull_Mode;
+			P15 = 1;
+			P14_Input_Mode;
+			P14 = 1;
+			P13_Input_Mode;
+			P13 = 1;
+		}
+		else if (step == 3)
+		{
 			P17_PushPull_Mode;
 			P17 = 0;
 			P15_PushPull_Mode;
-			P15 = 0;
+			P15 = 1;
 			P14_PushPull_Mode;
-			P14 = 0;
+			P14 = 1;
 			P13_PushPull_Mode;
-			P13 = 0;
+			P13 = 1;
 		}
 		#endif
 }
 void RF_CK_LED_LEVEL6(unsigned char step)
 {
-		#if 1	// 6
+		#if 0	// 6
 			
-			P17_Quasi_Mode;
-			P15_Quasi_Mode;
-			P14_Quasi_Mode;
-			P13_Quasi_Mode;
+//		P17_Quasi_Mode;
+//		P15_Quasi_Mode;
+//		P14_Quasi_Mode;
+//		P13_Quasi_Mode;
 		if (step == 4)
 		{
+//			P17_Input_Mode;
+//			P15_Input_Mode;
+//			P14_Input_Mode;
+//			P13_Input_Mode;
+//			step = 1;
+//			P17_PushPull_Mode;
+//			P17 = 0;
+//			P15_PushPull_Mode;
+//			P14_PushPull_Mode;
+//			P15 = 1;
+//			P14 = 1;
+//			P13_PushPull_Mode;
+//			P13 = 1;
+			P17_Input_Mode;
+			P15_Quasi_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
 			step = 1;
 			P17_PushPull_Mode;
 			P17 = 0;
-			P15_PushPull_Mode;
-			P15 = 1;
 			P14_PushPull_Mode;
+			
+			P15 = 1;
 			P14 = 1;
 			P13_PushPull_Mode;
 			P13 = 1;
+			P15_PushPull_Mode;
 		}
 		else if (step == 1)
 		{
+			P17 = 1;
+			P17_Input_Mode;
+			P15_Input_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
 			step = 2;
 			P17_PushPull_Mode;
 			P17 = 1;
-			P15_PushPull_Mode;
-			P15 = 0;
 			P14_PushPull_Mode;
 			P14 = 1;
 			P13_PushPull_Mode;
 			P13 = 1;
+			P15_PushPull_Mode;
+			P15 = 0;
 		}
 		else if (step == 2)
 		{
+			P17_Input_Mode;
+			P15_Input_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
 			step = 3;
 			P17_PushPull_Mode;
 			P17 = 0;
@@ -688,6 +846,10 @@ void RF_CK_LED_LEVEL6(unsigned char step)
 		}
 		else if (step == 3)
 		{
+			P17_Input_Mode;
+			P15_Input_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
 			step = 0;
 			P17_PushPull_Mode;
 			P17 = 0;
@@ -700,20 +862,12 @@ void RF_CK_LED_LEVEL6(unsigned char step)
 		}
 		#endif
 		
-}
-void RF_CK_LED_LEVEL7(unsigned char step)
-{
-		#if 1	// 7
-			
-			P17_Input_Mode;
-			P15_Input_Mode;
-			P14_Input_Mode;
-			P13_Input_Mode;
+		#if 1	//6
+
 		if (step == 4)
 		{
-			step = 1;
 			P17_PushPull_Mode;
-			P17 = 0;
+			P17 = 1;
 			P15_PushPull_Mode;
 			P15 = 1;
 			P14_PushPull_Mode;
@@ -723,6 +877,68 @@ void RF_CK_LED_LEVEL7(unsigned char step)
 		}
 		else if (step == 1)
 		{
+			P17_PushPull_Mode;
+			P17 = 1;
+			P14_PushPull_Mode;
+			P14 = 1;
+			P13_PushPull_Mode;
+			P13 = 1;
+			P15_PushPull_Mode;
+			P15 = 0;
+		}
+		else if (step == 2)
+		{
+			P17_Input_Mode;
+			P17 = 1;
+			P15_PushPull_Mode;
+			P15 = 1;
+			P14_Input_Mode;
+			P14 = 1;
+			P13_Input_Mode;
+			P13 = 1;
+		}
+		else if (step == 3)
+		{
+			P17_PushPull_Mode;
+			P17 = 0;
+			P15_PushPull_Mode;
+			P15 = 1;
+			P14_PushPull_Mode;
+			P14 = 1;
+			P13_PushPull_Mode;
+			P13 = 1;
+		}
+		#endif
+}
+void RF_CK_LED_LEVEL7(unsigned char step)
+{
+		#if 1	// 7
+			
+			
+		if (step == 4)
+		{
+			P17_Input_Mode;
+			P15_Quasi_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
+			step = 1;
+			P17_PushPull_Mode;
+			P17 = 0;
+			P14_PushPull_Mode;
+			
+			P15 = 1;
+			P14 = 1;
+			P13_PushPull_Mode;
+			P13 = 1;
+			P15_PushPull_Mode;
+		}
+		else if (step == 1)
+		{
+			P17 = 1;
+			P17_Input_Mode;
+			P15_Input_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
 			P14_Input_Mode;
 			P14 = 1;
 			step = 2;
@@ -737,20 +953,31 @@ void RF_CK_LED_LEVEL7(unsigned char step)
 		}
 		else if (step == 2)
 		{
-			P14_Input_Mode;
-			P14 = 1;
+			P15 = 1;
+			P17_Input_Mode;
+			P15_Input_Mode;
+			P14_Quasi_Mode;
+			P13_Input_Mode;
+//			P14_Input_Mode;
+//			P14 = 1;
 			step = 3;
-			P17_PushPull_Mode;
-			P17 = 1;
+			
 			P15_Input_Mode;
 			P15 = 0;
-			P14_PushPull_Mode;
+//			P14_PushPull_Mode;
 			P14 = 0;
 			P13_Input_Mode;
 			P13 = 0;
+			P17_PushPull_Mode;
+			P17 = 1;
 		}
 		else if (step == 3)
 		{
+			P17 = 0;
+			P17_Input_Mode;
+			P15_Input_Mode;
+			P14_Input_Mode;
+			P13_Input_Mode;
 			step = 0;
 			P17_PushPull_Mode;
 			P17 = 0;
@@ -1484,6 +1711,7 @@ void main(void)
 			{
 				/*		check rf level	*/
 				valuetemp = getRFLevel();
+//				valuetemp = 7;
 				if (valuetemp != RF_Level)
 				{
 					if (valuetemp > RF_Level)
